@@ -24,17 +24,51 @@ function sessionToAdmin(session: any): Admin | null {
   };
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   admin:     null,
   loading:   true,
   authError: '',
 
   // Call once at app start — returns the unsubscribe fn for cleanup
   initAuth: () => {
-    // Get initial session
+    // 1. HANDLE URL HASH FIRST (OAuth callback)
+    const url = new URL(window.location.href);
+    const hash = url.hash.substring(1); // Remove #
+    
+    if (hash) {
+      const params = new URLSearchParams(hash);
+      const access_token = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+      
+      if (access_token && refresh_token) {
+        set({ loading: true });
+        
+        supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        }).then(({ data: { session }, error }) => {
+          if (error) {
+            console.error('Session exchange failed:', error);
+            set({ loading: false, authError: 'Login failed. Please try again.' });
+          } else {
+            const admin = sessionToAdmin(session);
+            if (admin && !isAuthorizedEmail(admin.email)) {
+              supabase.auth.signOut();
+              set({ admin: null, loading: false, authError: 'Your email is not authorized.' });
+            } else {
+              set({ admin, loading: false, authError: '' });
+            }
+          }
+          // Clean URL (remove #access_token...)
+          window.history.replaceState({}, document.title, url.pathname);
+        });
+        return () => {}; // Early return - no subscription needed
+      }
+    }
+
+    // 2. NORMAL SESSION CHECK (existing logic)
     supabase.auth.getSession().then(({ data: { session } }) => {
       const admin = sessionToAdmin(session);
-      // Check authorization on restore
       if (admin && !isAuthorizedEmail(admin.email)) {
         supabase.auth.signOut();
         set({ admin: null, loading: false, authError: 'Your email is not authorized.' });
@@ -43,7 +77,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
     });
 
-    // Subscribe to auth state changes
+    // 3. Subscribe to auth state changes (existing logic)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const admin = sessionToAdmin(session);
       if (admin && !isAuthorizedEmail(admin.email)) {
