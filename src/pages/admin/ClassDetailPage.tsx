@@ -6,6 +6,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
 import { fetchClasses, fetchQuizzesByClass, toggleQuiz, deleteQuiz, fetchStudentsByClass, fetchClassSubmissions } from '../../lib/db';
 import { Class, Quiz, ClassStudent } from '../../types';
+import { supabase } from '../../lib/supabase';
 
 type Tab = 'quizzes' | 'students' | 'scores';
 
@@ -51,6 +52,8 @@ export default function ClassDetailPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [quizFilter, setQuizFilter] = useState('all');
+  const [editingClassName, setEditingClassName] = useState(false);
+  const [classNameDraft, setClassNameDraft] = useState('');
   const [confirm, setConfirm] = useState<{ msg: string; detail?: string; onConfirm: () => void } | null>(null);
 
   // Load class, quizzes, students, and submissions
@@ -89,6 +92,22 @@ export default function ClassDetailPage() {
       showToast(e.message || 'Failed', 'error');
     }
   };
+
+  const handleSaveClassName = async () => {
+  if (!classNameDraft.trim() || !cls) return;
+  try {
+    const { error } = await supabase
+      .from('classes')
+      .update({ name: classNameDraft.trim() })
+      .eq('id', cls.id);
+    if (error) throw error;
+    setCls({ ...cls, name: classNameDraft.trim() });
+    setEditingClassName(false);
+    showToast('Class name updated!');
+  } catch (e: any) {
+    showToast(e.message || 'Failed', 'error');
+  }
+};
 
   // Delete quiz
   const handleDelete = (id: string, title: string) => setConfirm({
@@ -178,7 +197,32 @@ export default function ClassDetailPage() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#f59e0b]/20 bg-[#f59e0b]/10 text-xl">🏫</div>
                 <span className="font-mono text-sm px-2 py-0.5 rounded bg-[#fdf8f0]/10 text-[#fdf8f0]">{cls.code}</span>
               </div>
-              <h1 className="font-serif text-3xl text-[#fdf8f0]">{cls.name}</h1>
+              {editingClassName ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    className="px-2 py-1 rounded border border-white/10 bg-[#1a1a1a]/50 text-[#fdf8f0] font-serif text-2xl max-w-xs"
+                    value={classNameDraft}
+                    onChange={e => setClassNameDraft(e.target.value)}
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSaveClassName();
+                      if (e.key === 'Escape') setEditingClassName(false);
+                    }}
+                  />
+                  <button className="px-3 py-1.5 bg-[#f59e0b]/10 hover:bg-[#f59e0b]/20 rounded text-sm text-[#f59e0b]" onClick={handleSaveClassName}>Save</button>
+                  <button className="px-3 py-1.5 border rounded border-white/10 text-sm" onClick={() => setEditingClassName(false)}>Cancel</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mt-1">
+                  <h1 className="font-serif text-3xl text-[#fdf8f0]">{cls.name}</h1>
+                  <button
+                    className="px-2 py-1 text-xs border rounded border-white/10 hover:border-[#f59e0b]/30 hover:text-[#f59e0b] transition"
+                    onClick={() => { setClassNameDraft(cls.name); setEditingClassName(true); }}
+                  >
+                    ✎ Edit
+                  </button>
+                </div>
+              )}
               <p className="mt-1 text-sm text-[#b3b3b3]">
                 Created {new Date(cls.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
