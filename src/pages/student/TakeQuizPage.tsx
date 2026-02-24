@@ -262,18 +262,18 @@ export default function TakeQuizPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
-              <input type="text" className={`w-full px-4 py-3 border rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${infoErrors.fullName ? 'border-red-300 bg-red-50 focus:ring-red-500' : 'border-gray-200'}`} placeholder="Last Name, First Name" value={info.fullName} onChange={e => { setInfo(p => ({ ...p, fullName: e.target.value })); setInfoErrors(p => ({ ...p, fullName: '' })); }} />
+              <input type="text" className={`w-full px-4 py-3 border rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${infoErrors.fullName ? 'border-red-300 bg-red-50 focus:ring-red-500' : 'border-gray-200'}`} placeholder="Last Name, First Name Middle Initial" value={info.fullName} onChange={e => { setInfo(p => ({ ...p, fullName: e.target.value })); setInfoErrors(p => ({ ...p, fullName: '' })); }} />
               {infoErrors.fullName && <p className="mt-1 text-xs text-red-600">{infoErrors.fullName}</p>}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Section *</label>
-                <input type="text" className={`w-full px-4 py-3 border rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${infoErrors.section ? 'border-red-300 bg-red-50 focus:ring-red-500' : 'border-gray-200'}`} placeholder="2-A" value={info.section} onChange={e => { setInfo(p => ({ ...p, section: e.target.value })); setInfoErrors(p => ({ ...p, section: '' })); }} />
+                <input type="text" className={`w-full px-4 py-3 border rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${infoErrors.section ? 'border-red-300 bg-red-50 focus:ring-red-500' : 'border-gray-200'}`} placeholder="ex. 2-A" value={info.section} onChange={e => { setInfo(p => ({ ...p, section: e.target.value })); setInfoErrors(p => ({ ...p, section: '' })); }} />
                 {infoErrors.section && <p className="mt-1 text-xs text-red-600">{infoErrors.section}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Year & Course *</label>
-                <input type="text" className={`w-full px-4 py-3 border rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${infoErrors.yearCourse ? 'border-red-300 bg-red-50 focus:ring-red-500' : 'border-gray-200'}`} placeholder="2nd Year BSCS" value={info.yearCourse} onChange={e => { setInfo(p => ({ ...p, yearCourse: e.target.value })); setInfoErrors(p => ({ ...p, yearCourse: '' })); }} />
+                <label className="block text-sm font-medium text-gray-700 mb-2">Course *</label>
+                <input type="text" className={`w-full px-4 py-3 border rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${infoErrors.yearCourse ? 'border-red-300 bg-red-50 focus:ring-red-500' : 'border-gray-200'}`} placeholder="ex. BSREM" value={info.yearCourse} onChange={e => { setInfo(p => ({ ...p, yearCourse: e.target.value })); setInfoErrors(p => ({ ...p, yearCourse: '' })); }} />
                 {infoErrors.yearCourse && <p className="mt-1 text-xs text-red-600">{infoErrors.yearCourse}</p>}
               </div>
             </div>
