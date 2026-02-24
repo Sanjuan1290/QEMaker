@@ -37,6 +37,7 @@ export interface Quiz {
   questions: Question[];
   raw_input?: string;
   is_active: boolean;
+  max_attempts: number;   // ← NEW: 1 = no retakes, 2+ = allowed retakes
   created_at: string;
 }
 

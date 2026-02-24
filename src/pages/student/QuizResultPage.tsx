@@ -1,11 +1,19 @@
 import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Submission } from '../../types';
 
-interface LocationState { submission: Submission; quizTitle: string; className?: string; }
+interface LocationState {
+  submission: Submission;
+  quizTitle: string;
+  className?: string;
+  maxAttempts?: number;      // total allowed attempts
+  attemptNumber?: number;    // which attempt this was (1-based)
+  quizId?: string;
+}
 
 export default function QuizResultPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const state = location.state as LocationState | null;
 
   if (!state?.submission) return (
@@ -18,8 +26,20 @@ export default function QuizResultPage() {
     </div>
   );
 
-  const { submission: s, quizTitle, className } = state;
+  const { submission: s, quizTitle, className, maxAttempts = 1, attemptNumber = 1, quizId } = state;
   const passed = s.percentage >= 75;
+  const attemptsLeft = maxAttempts - attemptNumber;
+  const canRetake = attemptsLeft > 0 && quizId;
+
+  const handleRetake = () => {
+    if (!quizId) return;
+    // Clear saved progress so the form shows again fresh (but keep info)
+    localStorage.removeItem(`quiz-answers-${quizId}`);
+    localStorage.removeItem(`quiz-current-q-${quizId}`);
+    localStorage.removeItem(`quiz-submitted-${quizId}`);
+    // Note: We keep studentInfo so they don't retype their name etc.
+    navigate(`/quiz/${quizId}`);
+  };
 
   return (
     <div className="min-h-screen pb-20 bg-[#0a0908] text-[#fdf8f0]">
@@ -49,10 +69,21 @@ export default function QuizResultPage() {
           <div className={`mt-6 font-serif text-xl ${passed ? 'text-[#10b981]' : 'text-[#f43f5e]'}`}>
             {passed ? '🎉 Congratulations — Passed!' : '📚 Keep studying — Almost there!'}
           </div>
+
+          {/* Attempt info */}
+          {maxAttempts > 1 && (
+            <div className="mt-3 text-sm text-[#b3b3b3]">
+              Attempt {attemptNumber} of {maxAttempts}
+              {canRetake && (
+                <span className="ml-2 text-[#f59e0b]">· {attemptsLeft} retake{attemptsLeft > 1 ? 's' : ''} remaining</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="relative mx-auto -mt-8 max-w-[700px] px-6">
+        {/* Student info card */}
         <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-6 shadow-lg animate-fade-up mb-4">
           <div className="flex flex-wrap justify-between gap-5">
             <div>
@@ -70,58 +101,44 @@ export default function QuizResultPage() {
               ].map(st => (
                 <div key={st.label} className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3 text-center">
                   <div className={`font-serif text-3xl leading-none ${st.color}`}>{st.v}</div>
-                  <div className="mt-1 text-[0.625rem] font-semibold uppercase tracking-wider text-[#b3b3b3]">
-                    {st.label}
-                  </div>
+                  <div className="mt-1 text-[0.625rem] font-semibold uppercase tracking-wider text-[#b3b3b3]">{st.label}</div>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-6 shadow-lg animate-fade-up">
-          <h3 className="mb-4 text-xs font-semibold uppercase tracking-widest text-[#b3b3b3]">
-            Answer Review · {s.score} correct, {s.total - s.score} wrong
-          </h3>
-          {s.answers.map((ans, i) => (
-            <div key={ans.questionNumber}
-              className={`flex flex-col gap-1 mb-3 p-3 rounded-xl border transition
-                          ${ans.isCorrect ? 'border-[#10b981]/25 bg-[#10b981]/7' : 'border-[#f43f5e]/25 bg-[#f43f5e]/7'}`}
-              style={{ animationDelay: `${i * 20}ms` }}
-            >
-              <div className="flex justify-between items-start gap-3 mb-1">
-                <div className="flex flex-1 gap-2 text-sm font-medium text-[#fdf8f0]">
-                  <span className="font-mono text-xs text-[#f59e0b] mt-0.5">{ans.questionNumber}.</span>
-                  {ans.question}
-                </div>
-                <span className="shrink-0 text-sm font-bold">
-                  {ans.isCorrect ? '✓' : '✕'}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1 pl-4 text-xs">
-                <span>
-                  <span className="text-[#b3b3b3]">Your answer: </span>
-                  <strong className={ans.isCorrect ? 'text-[#10b981]' : 'text-[#f43f5e]'}>
-                    {ans.chosen?.toUpperCase() || '—'}. {ans.chosenText || 'No answer'}
-                  </strong>
-                </span>
-                {!ans.isCorrect && (
-                  <span>
-                    <span className="text-[#b3b3b3]">Correct: </span>
-                    <strong className="text-[#10b981]">{ans.correct?.toUpperCase()}. {ans.correctText}</strong>
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-8 p-6 bg-[#1a1a1a]/50 border border-white/10 rounded-xl text-center">
-          <div className="text-lg font-serif font-bold text-[#10b981] mb-2">✅ Quiz Completed Successfully</div>
-          <p className="text-xs text-[#7c7c7c] leading-relaxed max-w-md mx-auto">
-            Your results have been permanently recorded in the system. 
-            <strong className="block text-[#fdf8f0] font-semibold mt-1">No retakes are allowed.</strong>
-          </p>
+        {/* Footer: retake or completed */}
+        <div className="mt-6 p-6 bg-[#1a1a1a]/50 border border-white/10 rounded-xl text-center">
+          {canRetake ? (
+            <>
+              <div className="text-lg font-serif font-bold text-[#f59e0b] mb-2">🔄 Retake Available</div>
+              <p className="text-xs text-[#7c7c7c] leading-relaxed max-w-md mx-auto mb-5">
+                You have <strong className="text-[#fdf8f0]">{attemptsLeft} retake{attemptsLeft > 1 ? 's' : ''} remaining</strong> for this quiz.
+                Your best score will be recorded.
+              </p>
+              <button
+                onClick={handleRetake}
+                className="inline-flex items-center gap-2 px-8 py-3 bg-gradient-to-br from-[#f59e0b] to-[#d97706] text-[#0a0908] font-bold rounded-xl shadow-lg hover:shadow-[0_4px_20px_rgba(245,158,11,0.35)] transition-all duration-200 hover:-translate-y-0.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Retake Quiz ({attemptsLeft} left)
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="text-lg font-serif font-bold text-[#10b981] mb-2">✅ Quiz Completed Successfully</div>
+              <p className="text-xs text-[#7c7c7c] leading-relaxed max-w-md mx-auto">
+                Your results have been permanently recorded in the system.
+                {maxAttempts > 1
+                  ? <strong className="block text-[#fdf8f0] font-semibold mt-1">You have used all {maxAttempts} attempts.</strong>
+                  : <strong className="block text-[#fdf8f0] font-semibold mt-1">No retakes are allowed.</strong>
+                }
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

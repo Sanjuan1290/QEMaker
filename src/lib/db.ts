@@ -124,7 +124,7 @@ export async function deleteQuiz(id: string): Promise<void> {
 export async function fetchQuizForStudent(id: string): Promise<{ quiz: Quiz; className: string }> {
   const { data, error } = await supabase
     .from('quizzes')
-    .select('id, title, class_id, class_code, is_active, questions, created_at')
+    .select('id, title, class_id, class_code, is_active, questions, created_at, max_attempts, time_limit_minutes')
     .eq('id', id)
     .eq('is_active', true)
     .single();
@@ -391,20 +391,171 @@ export async function fetchQuizzesByClass(classId: string): Promise<Quiz[]> {
   return data as Quiz[];
 }
 
+// ─────────────────────────────────────────────────────────────
+//  UPDATED checkStudentSubmission — respects max_attempts
+// ─────────────────────────────────────────────────────────────
+
 /**
- * Check if student already submitted this quiz (prevents retakes)
+ * Check if student has reached the attempt limit for this quiz.
+ * Returns true if they cannot take it again (blocked).
  */
 export async function checkStudentSubmission(
-  quizId: string, 
+  quizId: string,
   email: string
 ): Promise<boolean> {
+  const { data: quizData } = await supabase
+    .from('quizzes')
+    .select('max_attempts')
+    .eq('id', quizId)
+    .single();
+
+  const maxAttempts: number = quizData?.max_attempts ?? 1;
+
   const { data, error } = await supabase
     .from('submissions')
     .select('id')
     .eq('quiz_id', quizId)
-    .eq('email', email.toLowerCase().trim())
-    .limit(1);
+    .eq('email', email.toLowerCase().trim());
 
   if (error) throw error;
-  return !!data?.length;
+  return (data?.length ?? 0) >= maxAttempts;
+}
+
+
+/**
+ * Fetch a student's most recent submission for a quiz (to show past answers)
+ */
+export async function fetchStudentPastSubmission(
+  quizId: string,
+  email: string
+): Promise<Submission> {
+  const { data, error } = await supabase
+    .from('submissions')
+    .select('*')
+    .eq('quiz_id', quizId)
+    .eq('email', email.toLowerCase().trim())
+    .order('submitted_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error || !data) throw new Error('No submission found.');
+  return data as Submission;
+}
+/**
+ * Count how many times a student submitted a quiz
+ */
+export async function countStudentSubmissions(
+  quizId: string,
+  email: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('submissions')
+    .select('id')
+    .eq('quiz_id', quizId)
+    .eq('email', email.toLowerCase().trim());
+
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+/**
+ * Update the max_attempts field on a quiz (admin sets retake limit)
+ * NOTE: You need to add a `max_attempts` column (integer, default 1) to your `quizzes` table in Supabase.
+ * SQL: ALTER TABLE quizzes ADD COLUMN max_attempts integer DEFAULT 1;
+ */
+export async function updateQuizMaxAttempts(quizId: string, maxAttempts: number): Promise<Quiz> {
+  const { data, error } = await supabase
+    .from('quizzes')
+    .update({ max_attempts: Math.max(1, maxAttempts) })
+    .eq('id', quizId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Quiz;
+}
+
+export async function updateQuizTimeLimit(quizId: string, minutes: number): Promise<Quiz> {
+  const { data, error } = await supabase
+    .from('quizzes')
+    .update({ time_limit_minutes: Math.max(0, minutes) })
+    .eq('id', quizId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Quiz;
+}
+
+
+export function exportSubmissionsToExcel(
+  submissions: any[],
+  quizTitle: string,
+  quizzes?: any[]
+) {
+  // Build rows
+  const headers = [
+    'No.',
+    'Full Name',
+    'Email',
+    'Section',
+    'Year / Course',
+    ...(quizzes ? ['Quiz'] : []),
+    'Score',
+    'Total Items',
+    'Percentage (%)',
+    'Result',
+    'Date Submitted',
+  ];
+
+  const rows = submissions.map((s, i) => [
+    i + 1,
+    s.full_name,
+    s.email,
+    s.section,
+    s.year_course,
+    ...(quizzes ? [quizzes.find((q: any) => q.id === s.quiz_id)?.title || 'Deleted'] : []),
+    s.score,
+    s.total,
+    s.percentage,
+    s.percentage >= 75 ? 'PASSED' : 'FAILED',
+    new Date(s.submitted_at).toLocaleString(),
+  ]);
+
+  // CSV with BOM for Excel UTF-8 compatibility
+  const SEPARATOR = ',';
+  const allRows = [headers, ...rows];
+  const csvLines = allRows.map(row =>
+    row.map(cell => {
+      const str = String(cell ?? '');
+      // Wrap in quotes if contains comma, newline, or quote
+      return str.includes(SEPARATOR) || str.includes('"') || str.includes('\n')
+        ? `"${str.replace(/"/g, '""')}"`
+        : str;
+    }).join(SEPARATOR)
+  );
+
+  // Add a summary header at the top
+  const passed = submissions.filter(s => s.percentage >= 75).length;
+  const failed = submissions.length - passed;
+  const avg = submissions.length
+    ? Math.round(submissions.reduce((a, s) => a + s.percentage, 0) / submissions.length)
+    : 0;
+
+  const summaryLines = [
+    `"Quiz: ${quizTitle}"`,
+    `"Exported: ${new Date().toLocaleString()}"`,
+    `"Total Submissions: ${submissions.length} | Passed: ${passed} | Failed: ${failed} | Average: ${avg}%"`,
+    '', // blank line before headers
+  ];
+
+  const csvContent = [...summaryLines, ...csvLines].join('\n');
+
+  // Trigger download
+  const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${quizTitle.replace(/[^a-z0-9]/gi, '_')}_grades_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

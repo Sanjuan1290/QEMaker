@@ -9,6 +9,34 @@ import { Class, Quiz, ClassStudent } from '../../types';
 
 type Tab = 'quizzes' | 'students' | 'scores';
 
+function exportToExcel(subs: any[], quizzes: any[], className: string) {
+  const headers = ['Name', 'Email', 'Section', 'Year/Course', 'Quiz', 'Score', 'Total', 'Percentage (%)', 'Result', 'Date Submitted'];
+  const rows = subs.map(s => [
+    s.full_name,
+    s.email,
+    s.section,
+    s.year_course,
+    quizzes.find((q: any) => q.id === s.quiz_id)?.title || 'Deleted',
+    s.score,
+    s.total,
+    s.percentage,
+    s.percentage >= 75 ? 'Passed' : 'Failed',
+    new Date(s.submitted_at).toLocaleString(),
+  ]);
+
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${className.replace(/[^a-z0-9]/gi, '_')}_scores.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function ClassDetailPage() {
   const { classId } = useParams<{ classId: string }>();
   const navigate = useNavigate();
@@ -277,12 +305,21 @@ export default function ClassDetailPage() {
         {/* ── SCORES ── */}
         {tab === 'scores' && (
           <div className="animate-fade-up">
-            <div className="mb-4 flex flex-wrap gap-3">
+            <div className="mb-4 flex flex-wrap gap-3 items-center">
               <input type="text" className="flex-1 basis-48 max-w-xs px-3 py-2 rounded-lg border border-white/10 bg-[#1a1a1a]/50 text-[#fdf8f0]" placeholder="Search student…" value={search} onChange={e => setSearch(e.target.value)} />
               <select className="flex-1 basis-48 max-w-[260px] px-3 py-2 rounded-lg border border-white/10 bg-[#1a1a1a]/50 text-[#fdf8f0]" value={quizFilter} onChange={e => setQuizFilter(e.target.value)}>
                 <option value="all">All quizzes</option>
                 {quizzes.map(q => <option key={q.id} value={q.id}>{q.title}</option>)}
               </select>
+              <button
+                onClick={() => exportToExcel(filteredSubs, quizzes, cls.name)}
+                className="flex items-center gap-2 px-4 py-2 bg-[#10b981]/10 hover:bg-[#10b981]/20 border border-[#10b981]/30 text-[#10b981] rounded-lg text-sm font-semibold transition"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export Excel (CSV)
+              </button>
             </div>
             {filteredSubs.length === 0
               ? <EmptyState icon="📊" title="No scores yet" description="Scores appear once students submit quizzes." />
@@ -296,7 +333,7 @@ export default function ClassDetailPage() {
                     </thead>
                     <tbody>
                       {filteredSubs.map((s,i) => (
-                        <tr key={i} className="border-b border-white/10">
+                        <tr key={i} className="border-b border-white/10 hover:bg-white/5">
                           <td className="px-3 py-2 font-medium text-[#fdf8f0]">{s.full_name}</td>
                           <td className="px-3 py-2 font-mono text-xs">{s.email}</td>
                           <td className="px-3 py-2">{quizzes.find(q => q.id === s.quiz_id)?.title || 'Deleted'}</td>
